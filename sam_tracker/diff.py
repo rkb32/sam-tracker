@@ -142,30 +142,54 @@ def _text_diff(nid: str, what: str, old: str, new: str) -> TextChange | None:
 
 
 def render(rec: ChangeRecord, *, max_lines: int = 20) -> str:
-    """Human-readable report."""
-    out = [f"{rec.solnum}: {rec.from_taken_at} -> {rec.to_taken_at}"]
+    """Human-readable report. Plain section labels, not symbols - meant to be read, not just grepped."""
+    out = [f"{rec.solnum}  (checked {rec.from_taken_at} -> {rec.to_taken_at})"]
     if rec.is_empty:
         out.append("  no changes")
         return "\n".join(out)
-    for nid in rec.notices_added:
-        out.append(f"  + NEW NOTICE {nid}")
-    for nid in rec.notices_removed:
-        out.append(f"  - notice gone {nid}")
-    for fc in rec.field_changes:
-        flag = "!" if fc.critical else " "
-        out.append(f"  {flag} {fc.field}: {fc.before!r} -> {fc.after!r}  [{fc.notice_id}]")
-    for ac in rec.attachment_changes:
-        extra = " (scanned PDF - needs OCR)" if ac.needs_ocr else ""
-        size = f" {ac.size_before}->{ac.size_after}B" if ac.kind == "modified" else ""
-        out.append(f"  * attachment {ac.kind}: {ac.name}{size}{extra}  [{ac.notice_id}]")
-    for tc in rec.text_changes:
-        out.append(f"  ~ {tc.what}: +{len(tc.added)} / -{len(tc.removed)} lines  [{tc.notice_id}]")
-        for ln in tc.removed[:max_lines]:
-            out.append(f"      - {ln[:160]}")
-        for ln in tc.added[:max_lines]:
-            out.append(f"      + {ln[:160]}")
-        if len(tc.added) + len(tc.removed) > 2 * max_lines:
-            out.append("      ...")
+
+    if rec.notices_added:
+        out.append("\nNEW NOTICE(S) POSTED:")
+        for nid in rec.notices_added:
+            out.append(f"  - {nid}")
+    if rec.notices_removed:
+        out.append("\nNOTICE(S) NO LONGER LISTED:")
+        for nid in rec.notices_removed:
+            out.append(f"  - {nid}")
+
+    multi_notice = len({nid for nid in [*[f.notice_id for f in rec.field_changes],
+                                         *[a.notice_id for a in rec.attachment_changes],
+                                         *[t.notice_id for t in rec.text_changes]]}) > 1
+
+    def _notice_tag(nid: str) -> str:
+        return f" (notice {nid[:8]})" if multi_notice else ""
+
+    if rec.field_changes:
+        out.append("\nFIELDS CHANGED:")
+        for fc in rec.field_changes:
+            tag = " [IMPORTANT]" if fc.critical else ""
+            out.append(f"  {fc.field}:{tag}{_notice_tag(fc.notice_id)}")
+            out.append(f"    was: {fc.before!r}")
+            out.append(f"    now: {fc.after!r}")
+
+    if rec.attachment_changes:
+        out.append("\nATTACHMENTS:")
+        for ac in rec.attachment_changes:
+            extra = " - scanned PDF, not text-readable yet" if ac.needs_ocr else ""
+            size = f" ({ac.size_before}B -> {ac.size_after}B)" if ac.kind == "modified" else ""
+            out.append(f"  {ac.name} - {ac.kind}{size}{extra}{_notice_tag(ac.notice_id)}")
+
+    if rec.text_changes:
+        out.append("\nWHAT CHANGED INSIDE THE DOCUMENTS:")
+        for tc in rec.text_changes:
+            out.append(f"  {tc.what}{_notice_tag(tc.notice_id)}:")
+            for ln in tc.removed[:max_lines]:
+                out.append(f"    removed: {ln[:160]}")
+            for ln in tc.added[:max_lines]:
+                out.append(f"    added:   {ln[:160]}")
+            if len(tc.added) + len(tc.removed) > 2 * max_lines:
+                out.append("    ...")
+
     if rec.summary:
-        out.append("  summary: " + rec.summary.replace("\n", "\n           "))
+        out.append("\nSUMMARY:\n  " + rec.summary.replace("\n", "\n  "))
     return "\n".join(out)
