@@ -8,11 +8,18 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import socket
 from pathlib import Path
 
 import requests
+import urllib3.util.connection as urllib3_conn
 from requests.adapters import HTTPAdapter
 from urllib3.util import Retry
+
+# Some networks have broken IPv6 routing: every connection attempt hangs on an
+# unreachable IPv6 address for 10-20s before falling back to IPv4, which works
+# fine. Skip straight to IPv4 to avoid that delay.
+urllib3_conn.allowed_gai_family = lambda: socket.AF_INET
 
 SEARCH_URL = "https://api.sam.gov/prod/opportunities/v2/search"
 DESC_URL = "https://api.sam.gov/prod/opportunities/v1/noticedesc"
@@ -37,7 +44,10 @@ class SamClient:
         self.session = requests.Session()
         # Retry transient failures only - never 429, that means quota exhausted
         # (QuotaExceeded below), and retrying it would just burn more of a scarce budget.
-        retry = Retry(total=3, backoff_factor=1, status_forcelist=[500, 502, 503, 504])
+        # respect_retry_after_header=False because urllib3 otherwise auto-retries 429
+        # too (silently, if the response carries a Retry-After header) even though
+        # 429 is deliberately left out of status_forcelist below.
+        retry = Retry(total=3, backoff_factor=1, status_forcelist=[500, 502, 503, 504], respect_retry_after_header=False)
         adapter = HTTPAdapter(max_retries=retry)
         self.session.mount("https://", adapter)
         self.session.mount("http://", adapter)
