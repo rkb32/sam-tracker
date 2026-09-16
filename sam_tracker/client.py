@@ -11,6 +11,8 @@ import os
 from pathlib import Path
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util import Retry
 
 SEARCH_URL = "https://api.sam.gov/prod/opportunities/v2/search"
 DESC_URL = "https://api.sam.gov/prod/opportunities/v1/noticedesc"
@@ -33,6 +35,12 @@ class SamClient:
         self.cache = Path(cache_dir)
         self.cache.mkdir(parents=True, exist_ok=True)
         self.session = requests.Session()
+        # Retry transient failures only - never 429, that means quota exhausted
+        # (QuotaExceeded below), and retrying it would just burn more of a scarce budget.
+        retry = Retry(total=3, backoff_factor=1, status_forcelist=[500, 502, 503, 504])
+        adapter = HTTPAdapter(max_retries=retry)
+        self.session.mount("https://", adapter)
+        self.session.mount("http://", adapter)
 
     # ---- caching helpers -------------------------------------------------
     def _cache_path(self, kind: str, key: str, ext: str) -> Path:

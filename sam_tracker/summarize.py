@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 
 from .diff import ChangeRecord
 
@@ -24,10 +25,14 @@ def summarize(rec: ChangeRecord) -> str | None:
     # Keep the prompt bounded: cap diff lines per text change.
     for tc in payload["text_changes"]:
         tc["added"], tc["removed"] = tc["added"][:60], tc["removed"][:60]
-    response = client.messages.create(
-        model="claude-opus-5",
-        max_tokens=1024,
-        system=SYSTEM,
-        messages=[{"role": "user", "content": "Change record (JSON):\n" + json.dumps(payload, indent=1, default=str)}],
-    )
+    try:
+        response = client.messages.create(
+            model="claude-opus-5",
+            max_tokens=1024,
+            system=SYSTEM,
+            messages=[{"role": "user", "content": "Change record (JSON):\n" + json.dumps(payload, indent=1, default=str)}],
+        )
+    except anthropic.APIError as e:
+        print(f"warning: LLM summary failed, continuing without it: {e}", file=sys.stderr)
+        return None
     return "".join(b.text for b in response.content if b.type == "text").strip()

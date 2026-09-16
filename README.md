@@ -1,12 +1,9 @@
 # sam-tracker
 
-Tracks amendments to SAM.gov solicitations. Snapshots everything filed under a
-solicitation number (every notice, its description, every attachment), stores it,
-and on the next run reports exactly what changed: new amendment notices, deadline
-moves, set-aside/NAICS changes, added or re-uploaded attachments, and line-level
-text diffs of the documents themselves.
-
-SAM.gov's own "follow" emails tell you *that* something changed. This tells you *what*.
+A government contractor tracking a solicitation on SAM.gov gets a "something
+changed" email but has to click through and eyeball the whole notice again to
+find *what*. This does that diff for you: snapshot a solicitation, run it again
+later, and it prints exactly what moved.
 
 ```
 $ sam-tracker check
@@ -19,7 +16,9 @@ $ sam-tracker check
       + HVAC Chiller Preventative Maintenance Services
 ```
 
-`!` = critical field. Exit code `2` when anything changed, so cron/CI can alert on it.
+`+` new amendment notice, `!` a field that matters (deadline, set-aside, NAICS)
+changed, `*` an attachment was replaced, `~` line-level text diff of that
+attachment. Exit code `2` when anything changed, so cron can alert on it.
 
 ## Run it
 
@@ -50,21 +49,20 @@ summarize.py optional LLM summary of a ChangeRecord.
 cli.py       track / check / history / list
 ```
 
-Design choices worth knowing:
+`track` takes the first snapshot of a solicitation. `check` re-snapshots it and
+diffs against the last one. Under the hood, `check` re-downloads every notice
+and attachment (PDF/DOCX text is extracted so the diff can compare content, not
+just bytes), hashes the result, and if anything changed it runs `diff.py`
+against the previous snapshot and prints the result.
 
-- **Snapshot-diff, not event-driven.** SAM.gov has no changelog API and agencies post
-  amendments inconsistently (sometimes a new notice, sometimes an edit to the existing one).
-  Diffing full snapshots catches both without special-casing.
-- **Attachments are compared by content hash, then by extracted text.** A re-upload under a
-  new URL with the same filename is reported as *modified*, not add+remove. Identical bytes at a
-  new URL are ignored.
-- **DOCX extraction walks the XML directly.** `python-docx`'s `paragraphs` skips text boxes,
-  and SF-30 amendment forms are almost entirely text boxes - the first real amendment I pulled
-  extracted 0 characters that way.
-- **Quota is the real constraint.** A personal SAM.gov key gets ~10 calls/day *across all
-  endpoints* (search, description, file download each count). `check` costs `1 + notices` calls
-  per solicitation plus one per new attachment. `--offline` replays the cache so you can develop
-  without spending calls; a 429 exits with code 3 and the reset time.
+Two things worth knowing if you're reading the code:
+
+- **Attachments are matched by content hash, not URL.** SAM.gov re-uploads a
+  revised document under a brand-new URL, so matching by hash lets a same-name
+  re-upload show up as *modified* instead of a confusing add+remove.
+- **The SAM.gov API key is the bottleneck**, not the code. A personal key gets
+  ~10 calls/day total. `--offline` replays cached responses so you can iterate
+  without spending calls; a `429` exits with code `3` and prints the reset time.
 
 ## Scheduling
 
