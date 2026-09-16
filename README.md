@@ -7,18 +7,26 @@ later, and it prints exactly what moved.
 
 ```
 $ sam-tracker check
-36C25226Q0629: 2026-09-14T12:00:00+00:00 -> 2026-09-16T03:54:58+00:00
-  + NEW NOTICE fbe02225c2f7450d9d49be1201f2101e
-  ! responseDeadLine: '2026-09-19T09:00:00-05:00' -> '2026-09-23T09:00:00-05:00'  [37d1ff14...]
-  * attachment modified: 36C25226Q0629_1.docx 23657->23657B  [37d1ff14...]
-  ~ 36C25226Q0629_1.docx: +6 / -5 lines  [37d1ff14...]
-      - HVAC Boiler Preventative Maintenance Services
-      + HVAC Chiller Preventative Maintenance Services
+36C25226Q0629  (checked 2026-09-14T12:00:00+00:00 -> 2026-09-16T03:54:58+00:00)
+
+NEW NOTICE(S) POSTED:
+  - fbe02225c2f7450d9d49be1201f2101e
+
+FIELDS CHANGED:
+  responseDeadLine: [IMPORTANT]
+    was: '2026-09-19T09:00:00-05:00'
+    now: '2026-09-23T09:00:00-05:00'
+
+ATTACHMENTS:
+  36C25226Q0629_1.docx - modified (23657B -> 23657B)
+
+WHAT CHANGED INSIDE THE DOCUMENTS:
+  36C25226Q0629_1.docx:
+    removed: HVAC Boiler Preventative Maintenance Services
+    added:   HVAC Chiller Preventative Maintenance Services
 ```
 
-`+` new amendment notice, `!` a field that matters (deadline, set-aside, NAICS)
-changed, `*` an attachment was replaced, `~` line-level text diff of that
-attachment. Exit code `2` when anything changed, so cron can alert on it.
+Exit code `2` when anything changed, so cron can alert on it.
 
 ## Run it
 
